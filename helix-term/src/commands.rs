@@ -2456,7 +2456,7 @@ fn toggle_or_focus_explorer(cx: &mut Context) {
                 match editor.explorer.as_mut() {
                     Some(explore) => explore.content.focus(),
                     None => match ui::Explorer::new(cx) {
-                        Ok(explore) => editor.explorer = Some(overlayed(explore)),
+                        Ok(explore) => editor.explorer = Some(overlaid(explore)),
                         Err(err) => cx.editor.set_error(format!("{}", err)),
                     },
                 }
@@ -2470,13 +2470,13 @@ fn open_explorer_recursion(cx: &mut Context) {
         |compositor: &mut Compositor, cx: &mut compositor::Context| {
             if let Some(editor) = compositor.find::<ui::EditorView>() {
                 match ui::Explorer::new_explorer_recursion() {
-                    Ok(explore) => editor.explorer = Some(overlayed(explore)),
+                    Ok(explore) => editor.explorer = Some(overlaid(explore)),
                     Err(err) => cx.editor.set_error(format!("{}", err)),
                 }
             }
         },
     ));
-} 
+}
 
 fn close_explorer(cx: &mut Context) {
     cx.callback = Some(Box::new(|compositor: &mut Compositor, _| {
