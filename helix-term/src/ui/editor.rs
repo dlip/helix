@@ -7,7 +7,10 @@ use crate::{
     ui::{
         document::{render_document, LinePos, TextRenderer, TranslatedPosition},
         Completion, ProgressSpinners,
-    },
+
+overlay::Overlay,Completion, Explorer, ProgressSpinners
+            },
+    ui::{},
 };
 
 use helix_core::{
@@ -43,6 +46,7 @@ pub struct EditorView {
     pub(crate) last_insert: (commands::MappableCommand, Vec<InsertEvent>),
     pub(crate) completion: Option<Completion>,
     spinners: ProgressSpinners,
+    pub(crate) explorer: Option<Overlay<Explorer>>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +72,7 @@ impl EditorView {
             last_insert: (commands::MappableCommand::normal_mode, Vec::new()),
             completion: None,
             spinners: ProgressSpinners::default(),
+            explorer: None,
         }
     }
 
@@ -1205,6 +1210,11 @@ impl Component for EditorView {
         event: &Event,
         context: &mut crate::compositor::Context,
     ) -> EventResult {
+        if let Some(explore) = self.explorer.as_mut() {
+            if let EventResult::Consumed(callback) = explore.handle_event(event, context) {
+                return EventResult::Consumed(callback);
+            }
+        }
         let mut cx = commands::Context {
             editor: context.editor,
             count: None,
@@ -1371,6 +1381,18 @@ impl Component for EditorView {
 
         // -1 for commandline and -1 for bufferline
         let mut editor_area = area.clip_bottom(1);
+        
+        if self.explorer.is_some() && (config.explorer.is_embed()) {
+            editor_area = editor_area.clip_left(config.explorer.column_width as u16 + 2);
+        }
+        cx.editor.resize(editor_area); // -1 from bottom for commandline
+
+        if let Some(explore) = self.explorer.as_mut() {
+            if !explore.content.is_focus() && config.explorer.is_embed() {
+                explore.content.render(area, surface, cx);
+            }
+        }
+
         if use_bufferline {
             editor_area = editor_area.clip_top(1);
         }
@@ -1456,9 +1478,30 @@ impl Component for EditorView {
         if let Some(completion) = self.completion.as_mut() {
             completion.render(area, surface, cx);
         }
+
+        if let Some(explore) = self.explorer.as_mut() {
+            if explore.content.is_focus() {
+                if config.explorer.is_embed() {
+                    explore.content.render(area, surface, cx);
+                } else {
+                    explore.render(area, surface, cx);
+                }
+            }
+        }
     }
 
     fn cursor(&self, _area: Rect, editor: &Editor) -> (Option<Position>, CursorKind) {
+        if let Some(explore) = &self.explorer {
+            if explore.content.is_focus() {
+                if editor.config().explorer.is_overlay() {
+                    return explore.cursor(_area, editor);
+                }
+                let cursor = explore.content.cursor(_area, editor);
+                if cursor.0.is_some() {
+                    return cursor;
+                }
+            }
+        }
         match editor.cursor() {
             // All block cursors are drawn manually
             (pos, CursorKind::Block) => (pos, CursorKind::Hidden),
